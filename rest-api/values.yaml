@@ -30,9 +30,7 @@ resources:
 ingress:
   enabled: false
   className: nginx
-  annotations:
-    nginx.ingress.kubernetes.io/rate-limit-rps: "10"
-    nginx.ingress.kubernetes.io/rate-limit-burst-multiplier: "3"
+  annotations: {}
   hosts:
     - host: api.local
       paths:
@@ -52,14 +50,26 @@ securityContext:
     drop:
       - ALL
 
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
 probes:
   readiness:
     path: /health
     initialDelaySeconds: 5
     periodSeconds: 5
+    timeoutSeconds: 3
     failureThreshold: 3
   liveness:
     path: /health
     initialDelaySeconds: 15
     periodSeconds: 10
+    timeoutSeconds: 5
     failureThreshold: 3
