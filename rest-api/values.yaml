@@ -1,0 +1,48 @@
+replicaCount: 1
+
+image:
+  repository: nginx
+  tag: "1.28.2-alpine-slim"
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+app:
+  listenHost: "0.0.0.0"
+  listenPort: 8080
+
+service:
+  type: ClusterIP
+  port: 80
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: api.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+probes:
+  readiness:
+    path: /health
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    failureThreshold: 3
+  liveness:
+    path: /health
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    failureThreshold: 3

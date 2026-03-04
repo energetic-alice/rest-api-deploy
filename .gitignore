@@ -1,0 +1,16 @@
+.DS_Store
+.cursor/
+*.swp
+*.bak
+*.tmp
+*.orig
+*~
+
+.idea/
+.vscode/
+*.tmproj
+
+# Helm packages
+*.tgz
+
+README.md
