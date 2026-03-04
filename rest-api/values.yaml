@@ -1,12 +1,15 @@
 replicaCount: 1
 
 image:
-  repository: nginx
-  tag: "1.28.2-alpine-slim"
+  repository: nginxinc/nginx-unprivileged
+  tag: "1.29.5-alpine-slim"
   pullPolicy: IfNotPresent
 
-nameOverride: ""
-fullnameOverride: ""
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  automount: false
 
 app:
   listenHost: "0.0.0.0"
@@ -27,13 +30,27 @@ resources:
 ingress:
   enabled: false
   className: nginx
-  annotations: {}
+  annotations:
+    nginx.ingress.kubernetes.io/rate-limit-rps: "10"
+    nginx.ingress.kubernetes.io/rate-limit-burst-multiplier: "3"
   hosts:
     - host: api.local
       paths:
         - path: /
           pathType: Prefix
   tls: []
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 101
+  runAsGroup: 101
+  fsGroup: 101
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
 
 probes:
   readiness:
