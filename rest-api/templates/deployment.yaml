@@ -20,6 +20,12 @@ spec:
     metadata:
       labels:
         {{- include "rest-api.selectorLabels" . | nindent 8 }}
+      {{- if .Values.metrics.enabled }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.app.listenPort | quote }}
+        prometheus.io/path: {{ .Values.metrics.path | quote }}
+      {{- end }}
     spec:
       serviceAccountName: {{ include "rest-api.serviceAccountName" . }}
       {{- with .Values.podSecurityContext }}

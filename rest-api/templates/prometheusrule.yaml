@@ -1,0 +1,89 @@
+{{- if .Values.prometheusRule.enabled -}}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "rest-api.fullname" . }}
+  labels:
+    {{- include "rest-api.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: {{ include "rest-api.fullname" . }}
+      rules:
+        - alert: PodDown
+          expr: |
+            kube_deployment_status_replicas_available{namespace="{{ .Release.Namespace }}", deployment="{{ include "rest-api.fullname" . }}"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "All replicas of {{ include "rest-api.fullname" . }} are down"
+            description: "Deployment has 0 available replicas for more than 5 minutes."
+        - alert: HighMemoryUsage
+          expr: |
+            container_memory_working_set_bytes{namespace="{{ .Release.Namespace }}", pod=~"{{ include "rest-api.fullname" . }}.*", container="{{ .Chart.Name }}"} / container_spec_memory_limit_bytes > {{ .Values.prometheusRule.thresholds.memoryUsage }}
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High memory usage on {{ "{{" }} $labels.pod {{ "}}" }}"
+            description: "Memory usage is above 80% of the limit."
+        - alert: HighCPUUsage
+          expr: |
+            sum by (pod) (rate(container_cpu_usage_seconds_total{namespace="{{ .Release.Namespace }}", pod=~"{{ include "rest-api.fullname" . }}.*", container="{{ .Chart.Name }}"}[5m]))
+            /
+            sum by (pod) (kube_pod_container_resource_limits{namespace="{{ .Release.Namespace }}", pod=~"{{ include "rest-api.fullname" . }}.*", container="{{ .Chart.Name }}", resource="cpu"})
+            > {{ .Values.prometheusRule.thresholds.cpuUsage }}
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High CPU usage on {{ "{{" }} $labels.pod {{ "}}" }}"
+            description: "CPU usage is above 80% of the limit."
+        - alert: HighRestartCount
+          expr: |
+            increase(kube_pod_container_status_restarts_total{namespace="{{ .Release.Namespace }}", pod=~"{{ include "rest-api.fullname" . }}.*"}[15m]) > {{ .Values.prometheusRule.thresholds.restartCount }}
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod {{ "{{" }} $labels.pod {{ "}}" }} is restarting frequently"
+            description: "More than 3 restarts in the last 15 minutes."
+        {{- if .Values.ingress.enabled }}
+        # RED-method alerts based on Nginx Ingress Controller metrics.
+        # Require nginx ingress controller with metrics enabled.
+        - alert: HighErrorRate
+          expr: |
+            sum(rate(nginx_ingress_controller_requests{namespace="{{ .Release.Namespace }}", ingress="{{ include "rest-api.fullname" . }}", status=~"5.."}[5m]))
+            /
+            sum(rate(nginx_ingress_controller_requests{namespace="{{ .Release.Namespace }}", ingress="{{ include "rest-api.fullname" . }}"}[5m]))
+            > {{ .Values.prometheusRule.thresholds.errorRate }}
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "High error rate on {{ include "rest-api.fullname" . }}"
+            description: "More than 5% of requests returned 5xx for 5 minutes."
+        - alert: HighLatencyP95
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(nginx_ingress_controller_request_duration_seconds_bucket{namespace="{{ .Release.Namespace }}", ingress="{{ include "rest-api.fullname" . }}"}[5m])) by (le)
+            ) > {{ .Values.prometheusRule.thresholds.latencyP95 }}
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High p95 latency on {{ include "rest-api.fullname" . }}"
+            description: "95th percentile latency is above 500ms for 5 minutes."
+        - alert: HighLatencyP99
+          expr: |
+            histogram_quantile(0.99,
+              sum(rate(nginx_ingress_controller_request_duration_seconds_bucket{namespace="{{ .Release.Namespace }}", ingress="{{ include "rest-api.fullname" . }}"}[5m])) by (le)
+            ) > {{ .Values.prometheusRule.thresholds.latencyP99 }}
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "High p99 latency on {{ include "rest-api.fullname" . }}"
+            description: "99th percentile latency is above 1 second for 5 minutes."
+        {{- end }}
+{{- end }}

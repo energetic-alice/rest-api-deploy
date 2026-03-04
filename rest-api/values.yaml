@@ -50,6 +50,25 @@ securityContext:
     drop:
       - ALL
 
+metrics:
+  enabled: true
+  path: /metrics
+  port: http
+
+serviceMonitor:
+  enabled: false
+  interval: 30s
+
+prometheusRule:
+  enabled: false
+  thresholds:
+    cpuUsage: 0.8
+    memoryUsage: 0.8
+    restartCount: 3
+    errorRate: 0.05
+    latencyP95: 0.5
+    latencyP99: 1
+
 autoscaling:
   enabled: false
   minReplicas: 1
