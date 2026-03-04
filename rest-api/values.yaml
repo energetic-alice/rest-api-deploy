@@ -79,6 +79,11 @@ podDisruptionBudget:
   enabled: false
   minAvailable: 1
 
+affinity: {}
+topologySpreadConstraints: []
+nodeSelector: {}
+tolerations: []
+
 probes:
   readiness:
     path: /health
