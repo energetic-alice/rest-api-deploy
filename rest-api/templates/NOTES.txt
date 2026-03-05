@@ -1,0 +1,22 @@
+{{ .Release.Name }} deployed successfully in namespace {{ .Release.Namespace }}
+
+{{- if .Values.ingress.enabled }}
+Access the API:
+{{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+
+{{- else }}
+Port-forward to access locally:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "rest-api.fullname" . }} 8080:{{ .Values.service.port }}
+  curl http://localhost:8080
+{{- end }}
+
+Health checks:
+  curl http://localhost:8080/healthz
+  curl http://localhost:8080/readyz
+
+{{- if .Values.metrics.enabled }}
+Metrics:
+  curl http://localhost:8080/metrics
+{{- end }}

@@ -1,0 +1,14 @@
+# Staging uses default values for replicas, resources, and security
+# Only ingress and monitoring are overridden
+ingress:
+  enabled: true
+  annotations: {}
+  hosts:
+    - host: api.staging.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+
+# Metrics collection on staging to catch issues before prod
+serviceMonitor:
+  enabled: true

@@ -1,23 +1,12 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "rest-api.fullname" . }}-nginx
+  name: {{ include "rest-api.fullname" . }}
   labels:
     {{- include "rest-api.labels" . | nindent 4 }}
 data:
-  default.conf: |
-    server {
-        listen {{ .Values.app.listenPort }};
-        server_name _;
-
-        location / {
-            return 200 '{"status": "running"}';
-            add_header Content-Type application/json;
-        }
-
-        location /health {
-            access_log off;
-            return 200 '{"status": "healthy"}';
-            add_header Content-Type application/json;
-        }
-    }
+  LISTEN_HOST: {{ .Values.app.listenHost | quote }}
+  LISTEN_PORT: {{ .Values.app.listenPort | quote }}
+  {{- range $key, $value := .Values.app.env }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}

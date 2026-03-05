@@ -20,25 +20,38 @@ spec:
     metadata:
       labels:
         {{- include "rest-api.selectorLabels" . | nindent 8 }}
-      {{- if .Values.metrics.enabled }}
       annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- if .Values.metrics.enabled }}
         prometheus.io/scrape: "true"
         prometheus.io/port: {{ .Values.app.listenPort | quote }}
         prometheus.io/path: {{ .Values.metrics.path | quote }}
-      {{- end }}
+        {{- end }}
     spec:
       serviceAccountName: {{ include "rest-api.serviceAccountName" . }}
       {{- with .Values.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.affinity }}
+      {{- if .Values.podAntiAffinity.enabled }}
       affinity:
-        {{- toYaml . | nindent 8 }}
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    {{- include "rest-api.selectorLabels" . | nindent 20 }}
+                topologyKey: kubernetes.io/hostname
       {{- end }}
-      {{- with .Values.topologySpreadConstraints }}
+      {{- if .Values.topologySpread.enabled }}
       topologySpreadConstraints:
-        {{- toYaml . | nindent 8 }}
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "rest-api.selectorLabels" . | nindent 14 }}
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
@@ -48,6 +61,7 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
@@ -56,15 +70,22 @@ spec:
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "rest-api.fullname" . }}
           ports:
             - name: http
               containerPort: {{ .Values.app.listenPort }}
               protocol: TCP
-          env:
-            - name: LISTEN_HOST
-              value: {{ .Values.app.listenHost | quote }}
-            - name: LISTEN_PORT
-              value: {{ .Values.app.listenPort | quote }}
+          {{- if .Values.probes.startup.enabled }}
+          startupProbe:
+            httpGet:
+              path: {{ .Values.probes.startup.path }}
+              port: http
+            periodSeconds: {{ .Values.probes.startup.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.startup.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.startup.failureThreshold }}
+          {{- end }}
           {{- with .Values.probes.readiness }}
           readinessProbe:
             httpGet:
@@ -87,11 +108,3 @@ spec:
           {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          volumeMounts:
-            - name: nginx-config
-              mountPath: /etc/nginx/conf.d
-              readOnly: true
-      volumes:
-        - name: nginx-config
-          configMap:
-            name: {{ include "rest-api.fullname" . }}-nginx

@@ -1,54 +1,122 @@
 replicaCount: 1
 
 image:
-  repository: nginxinc/nginx-unprivileged
-  tag: "1.29.5-alpine-slim"
+  repository: ghcr.io/stefanprodan/podinfo
+  tag: "6.10.2"
   pullPolicy: IfNotPresent
-
-serviceAccount:
-  create: true
-  name: ""
-  annotations: {}
-  automount: false
 
 app:
   listenHost: "0.0.0.0"
-  listenPort: 8080
+  listenPort: 9898
+  # Extra env vars (non-sensitive only!)
+  env: {}
+  # for example:
+  #   LOG_LEVEL: "info"
+  #   DATABASE_HOST: "postgres.svc"
 
 service:
   type: ClusterIP
   port: 80
 
-resources:
-  requests:
-    cpu: 50m
-    memory: 64Mi
-  limits:
-    cpu: 200m
-    memory: 128Mi
-
 ingress:
   enabled: false
   className: nginx
+  # Rate-limit, CORS, TLS annotations go here per environment
   annotations: {}
   hosts:
     - host: api.local
       paths:
         - path: /
           pathType: Prefix
+  # TLS termination: either here (cert-manager + secret) or on external load balancer (GCP/AWS/Azure)
+  # If cloud LB handles SSL termination, leave empty
   tls: []
 
+# Isolates pod from default SA and disables K8s API access not needed for our stateless API
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  automount: false
+
+# UID 1000 = standard non-root application user
 podSecurityContext:
   runAsNonRoot: true
-  runAsUser: 101
-  runAsGroup: 101
-  fsGroup: 101
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
 
+# Container-level security 
+# readOnlyRootFilesystem not set because real apps often need writable /tmp
+# capabilities is what kernel staff you can do, seccomp is syscalls you can't do 
 securityContext:
   allowPrivilegeEscalation: false
   capabilities:
     drop:
       - ALL
+  seccompProfile:
+    type: RuntimeDefault
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    # For latency-sensitive APIs maybe useful to remove CPU limits entirely
+    cpu: 200m
+    memory: 128Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+# PDB protects pods availability during disruptions (node drain, cluster upgrades)
+# minAvailable must be < replicaCount, otherwise node drain will be blocked
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+# Time Kubernetes waits for graceful shutdown before SIGKILL to avoid 502 Bad Gateway
+terminationGracePeriodSeconds: 30
+
+# podAntiAffinity: spread pods across nodes (preferred, won't block scheduling)
+podAntiAffinity:
+  enabled: false
+
+# topologySpread distribution across availability zones
+topologySpread:
+  enabled: false
+
+# nodeSelector: pin to specific node pools (e.g. GPU, high-memory)
+nodeSelector: {}
+
+# tolerations: allow scheduling on tainted nodes 
+tolerations: []
+
+probes:
+  # startupProbe (needed for slow-starting apps) checks if pod started and ready to serve requests
+  startup:
+    enabled: false
+    path: /healthz
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 30
+  # readinessProbe ready for traffic
+  readiness:
+    path: /readyz
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+  # livenessProbe checks app is running
+  liveness:
+    path: /healthz
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
 
 metrics:
   enabled: true
@@ -59,6 +127,8 @@ serviceMonitor:
   enabled: false
   interval: 30s
 
+# Alerting rules (requires Prometheus Operator)
+# Thresholds are parameterized for per-environment tuning
 prometheusRule:
   enabled: false
   thresholds:
@@ -68,32 +138,5 @@ prometheusRule:
     errorRate: 0.05
     latencyP95: 0.5
     latencyP99: 1
-
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 10
-  targetCPUUtilizationPercentage: 70
-
-podDisruptionBudget:
-  enabled: false
-  minAvailable: 1
-
-affinity: {}
-topologySpreadConstraints: []
-nodeSelector: {}
-tolerations: []
-
-probes:
-  readiness:
-    path: /health
-    initialDelaySeconds: 5
-    periodSeconds: 5
-    timeoutSeconds: 3
-    failureThreshold: 3
-  liveness:
-    path: /health
-    initialDelaySeconds: 15
-    periodSeconds: 10
-    timeoutSeconds: 5
-    failureThreshold: 3
+    minRequestRate: 0.1
+    maxRequestRate: 1000

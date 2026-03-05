@@ -1,8 +1,0 @@
-ingress:
-  enabled: true
-  annotations: {}
-  hosts:
-    - host: api.staging.local
-      paths:
-        - path: /
-          pathType: Prefix

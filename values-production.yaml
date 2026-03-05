@@ -1,5 +1,7 @@
+# Ignored when autoscaling.enabled=true - serves as initial count before HPA enabled
 replicaCount: 3
 
+# Starting values — calibrate after 1-2 weeks in prod
 resources:
   requests:
     cpu: 100m
@@ -11,10 +13,11 @@ resources:
 ingress:
   enabled: true
   annotations:
+    # Rate limiting — calibrate for real traffic
     nginx.ingress.kubernetes.io/rate-limit-rps: "50"
     nginx.ingress.kubernetes.io/rate-limit-burst-multiplier: "5"
   hosts:
-    - host: api.production.local
+    - host: api.example.com
       paths:
         - path: /
           pathType: Prefix
@@ -24,28 +27,18 @@ autoscaling:
   minReplicas: 3
   maxReplicas: 20
   targetCPUUtilizationPercentage: 70
+  # Memory scaling added because REST APIs can hit memory limits before CPU
+  targetMemoryUtilizationPercentage: 80
 
 podDisruptionBudget:
   enabled: true
   minAvailable: "30%"
 
-affinity:
-  podAntiAffinity:
-    preferredDuringSchedulingIgnoredDuringExecution:
-      - weight: 100
-        podAffinityTerm:
-          labelSelector:
-            matchLabels:
-              app.kubernetes.io/name: rest-api
-          topologyKey: kubernetes.io/hostname
+podAntiAffinity:
+  enabled: true
 
-topologySpreadConstraints:
-  - maxSkew: 1
-    topologyKey: topology.kubernetes.io/zone
-    whenUnsatisfiable: ScheduleAnyway
-    labelSelector:
-      matchLabels:
-        app.kubernetes.io/name: rest-api
+topologySpread:
+  enabled: true
 
 serviceMonitor:
   enabled: true
